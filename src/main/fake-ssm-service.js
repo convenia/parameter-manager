@@ -93,23 +93,25 @@ export class FakeSsmService {
     const current = existing?.versions.at(-1)
     if (existing && expectedVersion != null && current.version !== expectedVersion) throw versionConflictError(name, current.version, expectedVersion)
     if (!value) throw awsError('ValidationException', "1 validation error detected: Value at 'value' failed to satisfy constraint: Member must have length greater than or equal to 1")
-    if (existing?.tier === 'Advanced' && tier === 'Standard') throw awsError('ValidationException', 'An Advanced parameter cannot be downgraded to the Standard tier.')
-    if (byteLength(value) > tierLimit(tier)) throw awsError('ValidationException', `Parameter value exceeds the maximum size for the ${tier} tier (${tierLimit(tier)} bytes).`)
+    // Same contract as SsmService: an overwrite keeps the stored metadata and never lowers the tier.
+    const writtenTier = existing && (existing.tier === 'Advanced' || tier === 'Advanced') ? 'Advanced' : tier
+    if (byteLength(value) > tierLimit(writtenTier)) throw awsError('ValidationException', `Parameter value exceeds the maximum size for the ${writtenTier} tier (${tierLimit(writtenTier)} bytes).`)
 
-    const record = existing ?? { name, tags: [], description: '', allowedPattern: null, versions: [] }
-    Object.assign(record, {
+    const record = existing ?? {
+      name,
+      tags: [],
       type,
-      tier,
       dataType: dataType || 'text',
       keyId: type === 'SecureString' ? keyId || 'alias/aws/ssm' : null,
-      // Like AWS: an overwrite without a description keeps the existing one.
-      description: description || record.description,
-      allowedPattern: allowedPattern ?? record.allowedPattern
-    })
+      description: description || '',
+      allowedPattern: allowedPattern ?? null,
+      versions: []
+    }
+    record.tier = writtenTier
     const version = (current?.version ?? 0) + 1
     record.versions.push({ version, value, lastModifiedDate: this.#now().toISOString(), lastModifiedUser: DEMO_USER, labels: [] })
     this.#params.set(name, record)
-    return { version, tier }
+    return { version, tier: writtenTier, meta: this.#meta(record) }
   }
 
   async delete(name) {

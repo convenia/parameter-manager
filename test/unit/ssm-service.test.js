@@ -90,33 +90,76 @@ describe('tags and history', () => {
 })
 
 describe('put', () => {
-  const update = { name: '/a', value: 'A=2', type: 'SecureString', tier: 'Standard', keyId: 'alias/custom', description: 'Prod env', dataType: 'text', allowedPattern: null, overwrite: true, expectedVersion: 4 }
+  const equals = (name) => ({ MaxResults: 50, ParameterFilters: [{ Key: 'Name', Option: 'Equals', Values: [name] }], NextToken: undefined })
+  // What the renderer may send: metadata from a list loaded before someone changed the parameter.
+  const stale = { name: '/a', value: 'A=2', type: 'String', tier: 'Standard', keyId: null, description: 'old description', dataType: 'text', allowedPattern: null, overwrite: true, expectedVersion: 4 }
+  const stored = { Name: '/a', Type: 'SecureString', Tier: 'Standard', KeyId: 'alias/team-cmk', Description: 'Prod env', DataType: 'text', Version: 4, LastModifiedDate: new Date('2026-09-01T10:00:00Z'), LastModifiedUser: 'arn:aws:iam::1:user/ana' }
+  const afterWrite = { ...stored, Version: 5, LastModifiedDate: new Date('2026-10-01T12:00:00Z'), LastModifiedUser: 'arn:aws:iam::1:user/leo' }
 
-  it('checks the version, then overwrites, keeping type, KMS key, and description', async () => {
-    ssm.on(GetParameterCommand).resolves({ Parameter: { Name: '/a', Type: 'SecureString', Version: 4 } })
+  it("overwrites with the parameter's stored type, KMS key, and description, not the caller's stale copy", async () => {
+    ssm.on(DescribeParametersCommand).resolvesOnce({ Parameters: [stored] }).resolvesOnce({ Parameters: [afterWrite] })
     ssm.on(PutParameterCommand).resolves({ Version: 5, Tier: 'Standard' })
-    expect(await service.put(update)).toEqual({ version: 5, tier: 'Standard' })
-    expect(inputs(GetParameterCommand)).toEqual([{ Name: '/a', WithDecryption: false }])
-    expect(inputs(PutParameterCommand)).toEqual([{ Name: '/a', Value: 'A=2', Type: 'SecureString', Tier: 'Standard', Overwrite: true, KeyId: 'alias/custom', Description: 'Prod env', DataType: 'text' }])
+    const result = await service.put(stale)
+    expect(inputs(DescribeParametersCommand)).toEqual([equals('/a'), equals('/a')])
+    expect(inputs(PutParameterCommand)).toEqual([{ Name: '/a', Value: 'A=2', Type: 'SecureString', Tier: 'Standard', Overwrite: true, KeyId: 'alias/team-cmk', Description: 'Prod env', DataType: 'text' }])
+    expect(result).toEqual({
+      version: 5,
+      tier: 'Standard',
+      meta: { name: '/a', type: 'SecureString', tier: 'Standard', dataType: 'text', version: 5, lastModifiedDate: '2026-10-01T12:00:00.000Z', lastModifiedUser: 'arn:aws:iam::1:user/leo', description: 'Prod env', keyId: 'alias/team-cmk', allowedPattern: null }
+    })
   })
 
   it('throws VersionConflict without writing when the version moved', async () => {
-    ssm.on(GetParameterCommand).resolves({ Parameter: { Name: '/a', Version: 5 } })
-    await expect(service.put(update)).rejects.toMatchObject({ code: 'VersionConflict', details: { currentVersion: 5 } })
+    ssm.on(DescribeParametersCommand).resolves({ Parameters: [{ ...stored, Version: 5 }] })
+    await expect(service.put(stale)).rejects.toMatchObject({ code: 'VersionConflict', details: { currentVersion: 5 } })
     expect(inputs(PutParameterCommand)).toEqual([])
   })
 
-  it('creates without a version check and omits empty optional fields', async () => {
-    ssm.on(PutParameterCommand).resolves({ Version: 1 })
-    await service.put({ name: '/new', value: 'x', type: 'String', tier: 'Standard', keyId: 'alias/ignored', description: '', dataType: 'text', allowedPattern: null, overwrite: false, expectedVersion: null })
-    expect(inputs(GetParameterCommand)).toEqual([])
-    expect(inputs(PutParameterCommand)).toEqual([{ Name: '/new', Value: 'x', Type: 'String', Tier: 'Standard', Overwrite: false, DataType: 'text' }])
+  it('keeps the stored metadata when overwriting without a version check', async () => {
+    ssm.on(DescribeParametersCommand).resolvesOnce({ Parameters: [{ ...stored, Version: 9, AllowedPattern: '^[A-Z=0-9]+$' }] }).resolvesOnce({ Parameters: [{ ...afterWrite, Version: 10 }] })
+    ssm.on(PutParameterCommand).resolves({ Version: 10 })
+    await service.put({ ...stale, expectedVersion: null })
+    expect(inputs(PutParameterCommand)[0]).toMatchObject({ Type: 'SecureString', KeyId: 'alias/team-cmk', AllowedPattern: '^[A-Z=0-9]+$' })
   })
 
-  it('keeps an allowed pattern on overwrite', async () => {
-    ssm.on(PutParameterCommand).resolves({ Version: 2 })
-    await service.put({ ...update, type: 'String', allowedPattern: '^[a-z]+$', expectedVersion: null })
-    expect(inputs(PutParameterCommand)[0].AllowedPattern).toBe('^[a-z]+$')
+  it('writes Advanced when either the stored or the requested tier is Advanced', async () => {
+    ssm.on(PutParameterCommand).resolves({ Version: 5 })
+    ssm.on(DescribeParametersCommand).resolves({ Parameters: [{ ...stored, Tier: 'Advanced' }] })
+    await service.put({ ...stale, tier: 'Standard' })
+    ssm.on(DescribeParametersCommand).resolves({ Parameters: [stored] })
+    await service.put({ ...stale, tier: 'Advanced' })
+    expect(inputs(PutParameterCommand).map((i) => i.Tier)).toEqual(['Advanced', 'Advanced'])
+  })
+
+  it('refuses to overwrite a parameter that no longer exists', async () => {
+    ssm.on(DescribeParametersCommand).resolves({ Parameters: [] })
+    await expect(service.put(stale)).rejects.toMatchObject({ name: 'ParameterNotFound' })
+    expect(inputs(PutParameterCommand)).toEqual([])
+  })
+
+  it('follows NextToken when the filtered lookup returns an empty first page', async () => {
+    ssm.on(DescribeParametersCommand).resolvesOnce({ Parameters: [], NextToken: 'more' }).resolvesOnce({ Parameters: [stored] }).resolvesOnce({ Parameters: [afterWrite] })
+    ssm.on(PutParameterCommand).resolves({ Version: 5 })
+    await service.put(stale)
+    expect(inputs(DescribeParametersCommand)[1].NextToken).toBe('more')
+    expect(inputs(PutParameterCommand)).toHaveLength(1)
+  })
+
+  it('reports the written version even if the follow-up lookup still shows the old one', async () => {
+    ssm.on(DescribeParametersCommand).resolves({ Parameters: [stored] })
+    ssm.on(PutParameterCommand).resolves({ Version: 5, Tier: 'Standard' })
+    const result = await service.put(stale)
+    expect(result.meta.version).toBe(5)
+    expect(result.meta.keyId).toBe('alias/team-cmk')
+  })
+
+  it('creates with the caller metadata and omits empty optional fields', async () => {
+    ssm.on(PutParameterCommand).resolves({ Version: 1 })
+    ssm.on(DescribeParametersCommand).resolves({ Parameters: [{ Name: '/new', Type: 'String', Tier: 'Standard', DataType: 'text', Version: 1 }] })
+    const result = await service.put({ name: '/new', value: 'x', type: 'String', tier: 'Standard', keyId: 'alias/ignored', description: '', dataType: 'text', allowedPattern: null, overwrite: false, expectedVersion: null })
+    expect(inputs(PutParameterCommand)).toEqual([{ Name: '/new', Value: 'x', Type: 'String', Tier: 'Standard', Overwrite: false, DataType: 'text' }])
+    expect(inputs(DescribeParametersCommand)).toEqual([equals('/new')])
+    expect(result).toMatchObject({ version: 1, tier: 'Standard', meta: { name: '/new', version: 1 } })
   })
 })
 

@@ -53,10 +53,17 @@ describe('reads', () => {
 describe('writes', () => {
   it('overwrites with a new version and keeps history', async () => {
     const fake = create()
-    expect(await fake.put({ ...base, name: '/myapp/dev/env', value: 'A=1', overwrite: true, expectedVersion: 1 })).toEqual({ version: 2, tier: 'Standard' })
+    expect(await fake.put({ ...base, name: '/myapp/dev/env', value: 'A=1', overwrite: true, expectedVersion: 1 })).toMatchObject({ version: 2, tier: 'Standard', meta: { name: '/myapp/dev/env', version: 2 } })
     const history = await fake.history('/myapp/dev/env', { decrypt: true })
     expect(history.map((h) => [h.version, h.value.slice(0, 3)])).toEqual([[2, 'A=1'], [1, 'APP']])
     expect(history[0].lastModifiedDate).toBe('2026-10-01T12:00:00.000Z')
+  })
+
+  it('keeps the stored type, KMS key, and description when an overwrite sends stale metadata', async () => {
+    const fake = new FakeSsmService({ now, seed: [{ name: '/x', type: 'SecureString', description: 'Current', versions: ['A=1'] }] })
+    const { meta } = await fake.put({ name: '/x', value: 'A=2', type: 'String', tier: 'Standard', keyId: null, description: 'Stale', dataType: 'text', allowedPattern: null, overwrite: true, expectedVersion: 1 })
+    expect(meta).toMatchObject({ type: 'SecureString', keyId: 'alias/aws/ssm', description: 'Current', version: 2 })
+    expect((await fake.get('/x', { decrypt: false })).value).toBeNull()
   })
 
   it('keeps the existing description when an overwrite sends an empty one', async () => {
@@ -67,7 +74,7 @@ describe('writes', () => {
 
   it('creates new parameters and refuses to create over an existing one', async () => {
     const fake = create()
-    expect(await fake.put({ ...base, type: 'String', name: '/new/param', value: 'x', overwrite: false })).toEqual({ version: 1, tier: 'Standard' })
+    expect(await fake.put({ ...base, type: 'String', name: '/new/param', value: 'x', overwrite: false })).toMatchObject({ version: 1, tier: 'Standard', meta: { type: 'String', version: 1 } })
     expect((await fake.get('/new/param')).value).toBe('x')
     await expect(fake.put({ ...base, name: '/new/param', value: 'y', overwrite: false })).rejects.toMatchObject({ name: 'ParameterAlreadyExists' })
   })
@@ -76,12 +83,12 @@ describe('writes', () => {
     await expect(create().put({ ...base, name: '/myapp/prod/env', value: 'A=1', overwrite: true, expectedVersion: 2 })).rejects.toMatchObject({ code: 'VersionConflict', details: { currentVersion: 3 } })
   })
 
-  it('enforces tier limits, the no-downgrade rule, and non-empty values like AWS', async () => {
+  it('enforces tier limits and non-empty values like AWS, and never downgrades a tier', async () => {
     const fake = create()
     const big = 'x'.repeat(5000)
     await expect(fake.put({ ...base, name: '/myapp/dev/env', value: big, overwrite: true })).rejects.toMatchObject({ name: 'ValidationException' })
-    expect(await fake.put({ ...base, name: '/myapp/dev/env', value: big, tier: 'Advanced', overwrite: true })).toEqual({ version: 2, tier: 'Advanced' })
-    await expect(fake.put({ ...base, name: '/myapp/dev/env', value: 'A=1', tier: 'Standard', overwrite: true })).rejects.toMatchObject({ name: 'ValidationException' })
+    expect(await fake.put({ ...base, name: '/myapp/dev/env', value: big, tier: 'Advanced', overwrite: true })).toMatchObject({ version: 2, tier: 'Advanced' })
+    expect(await fake.put({ ...base, name: '/myapp/dev/env', value: 'A=1', tier: 'Standard', overwrite: true })).toMatchObject({ version: 3, tier: 'Advanced' })
     await expect(fake.put({ ...base, name: '/myapp/dev/env', value: '', tier: 'Advanced', overwrite: true })).rejects.toMatchObject({ name: 'ValidationException' })
   })
 

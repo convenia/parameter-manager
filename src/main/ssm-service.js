@@ -87,9 +87,15 @@ export class SsmService {
   }
 
   async put({ name, value, type, tier, keyId, description, dataType, allowedPattern, overwrite, expectedVersion }) {
-    if (overwrite && expectedVersion != null) {
-      const { Parameter } = await this.client.send(new GetParameterCommand({ Name: name, WithDecryption: false }))
-      if (Parameter.Version !== expectedVersion) throw versionConflictError(name, Parameter.Version, expectedVersion)
+    let fields = { type, tier, keyId, description, dataType, allowedPattern }
+    if (overwrite) {
+      // The caller's metadata may come from a list loaded before someone changed the
+      // parameter, so the stored metadata wins: an overwrite only ever changes the value
+      // (and may raise the tier to Advanced).
+      const stored = await describeOne(this.client, name)
+      if (!stored) throw Object.assign(new Error(`Parameter ${name} not found.`), { name: 'ParameterNotFound' })
+      if (expectedVersion != null && stored.version !== expectedVersion) throw versionConflictError(name, stored.version, expectedVersion)
+      fields = { ...stored, tier: stored.tier === 'Advanced' || tier === 'Advanced' ? 'Advanced' : 'Standard' }
     }
     // Pass KeyId/Description/DataType/AllowedPattern explicitly: an overwrite that omits
     // KeyId re-encrypts with the default key instead of the parameter's own.
@@ -97,22 +103,39 @@ export class SsmService {
       new PutParameterCommand({
         Name: name,
         Value: value,
-        Type: type,
-        Tier: tier,
+        Type: fields.type,
+        Tier: fields.tier,
         Overwrite: Boolean(overwrite),
-        ...(type === 'SecureString' && keyId ? { KeyId: keyId } : {}),
-        ...(description ? { Description: description } : {}),
-        ...(dataType ? { DataType: dataType } : {}),
-        ...(allowedPattern ? { AllowedPattern: allowedPattern } : {})
+        ...(fields.type === 'SecureString' && fields.keyId ? { KeyId: fields.keyId } : {}),
+        ...(fields.description ? { Description: fields.description } : {}),
+        ...(fields.dataType ? { DataType: fields.dataType } : {}),
+        ...(fields.allowedPattern ? { AllowedPattern: fields.allowedPattern } : {})
       })
     )
-    return { version: res.Version, tier: res.Tier ?? tier }
+    const version = res.Version
+    const writtenTier = res.Tier ?? fields.tier
+    // Fresh metadata for the list row; DescribeParameters can briefly lag behind the write.
+    const after = await describeOne(this.client, name)
+    const meta = after && after.version >= version ? after : { ...toMeta({ Name: name, Type: fields.type, Tier: writtenTier, DataType: fields.dataType, KeyId: fields.keyId, Description: fields.description, AllowedPattern: fields.allowedPattern }), ...after, version, tier: writtenTier }
+    return { version, tier: writtenTier, meta }
   }
 
   async delete(name) {
     await this.client.send(new DeleteParameterCommand({ Name: name }))
     return { deleted: true }
   }
+}
+
+// DescribeParameters with a Name/Equals filter can still return empty pages with a NextToken.
+async function describeOne(client, name) {
+  let token
+  do {
+    const page = await client.send(new DescribeParametersCommand({ MaxResults: 50, ParameterFilters: [{ Key: 'Name', Option: 'Equals', Values: [name] }], NextToken: token }))
+    const found = (page.Parameters ?? []).find((p) => p.Name === name)
+    if (found) return toMeta(found)
+    token = page.NextToken
+  } while (token)
+  return null
 }
 
 function toMeta(p) {

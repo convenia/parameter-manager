@@ -26,11 +26,11 @@ function backend(overrides = {}) {
   }
 }
 
-function setup({ readOnly = false, autoDecrypt = true, ...overrides } = {}) {
+function setup({ readOnly = false, autoDecrypt = true, metaOverrides = {}, ...overrides } = {}) {
   const api = { ssm: backend(overrides) }
   const onChanged = vi.fn()
   const onDirtyChange = vi.fn()
-  const tab = createParameterTab({ api, connection: { id: 'c1', name: 'Prod', readOnly }, meta, getSettings: () => ({ autoDecrypt, maskValuesInDiff: false }), onChanged, onDirtyChange })
+  const tab = createParameterTab({ api, connection: { id: 'c1', name: 'Prod', readOnly }, meta: { ...meta, ...metaOverrides }, getSettings: () => ({ autoDecrypt, maskValuesInDiff: false }), onChanged, onDirtyChange })
   document.body.append(tab.el)
   tabs.push(tab)
   return { api, tab, onChanged, onDirtyChange }
@@ -72,6 +72,12 @@ describe('loading', () => {
     expect(api.ssm.get).toHaveBeenLastCalledWith('c1', NAME, { decrypt: true })
   })
 
+  it('shows the type read from AWS when the list entry is stale', async () => {
+    const { tab } = setup({ metaOverrides: { type: 'String' } })
+    await ready(tab)
+    expect(tab.el.querySelector('.param__badges').textContent).toContain('SecureString')
+  })
+
   it('gives read-only connections no write actions and a read-only editor', async () => {
     const { tab } = setup({ readOnly: true })
     await ready(tab)
@@ -99,11 +105,24 @@ describe('saving', () => {
     await vi.waitFor(() => expect(modal()).not.toBeNull())
     expect([...modal().querySelectorAll('.diff__row')].map((r) => r.dataset.key)).toEqual(['B'])
     inModal('confirm').click()
-    await vi.waitFor(() => expect(onChanged).toHaveBeenCalledWith({ type: 'saved', name: NAME, version: 4 }))
+    await vi.waitFor(() => expect(onChanged).toHaveBeenCalledWith(expect.objectContaining({ type: 'saved', name: NAME, version: 4 })))
     expect(api.ssm.put).toHaveBeenCalledWith('c1', { name: NAME, value: 'A=1\nB=3', type: 'SecureString', tier: 'Standard', keyId: 'alias/aws/ssm', description: 'Prod env', dataType: 'text', allowedPattern: null, overwrite: true, expectedVersion: 3 })
     expect(tab.el.querySelector('.param__version').textContent).toBe('Version 4')
     expect(tab.isDirty()).toBe(false)
     expect(onDirtyChange).toHaveBeenLastCalledWith(false)
+  })
+
+  it('takes the stored metadata returned by the save, even if the list was stale', async () => {
+    const put = vi.fn(async () => ({ version: 4, tier: 'Standard', meta: { ...meta, version: 4, keyId: 'alias/team-cmk', description: 'Rotated by Terraform' } }))
+    const { tab, onChanged } = setup({ put })
+    await ready(tab)
+    setText(tab, 'A=1\nB=3')
+    tab.el.querySelector('[data-action="save"]').click()
+    await vi.waitFor(() => expect(inModal('confirm')).not.toBeNull())
+    inModal('confirm').click()
+    await vi.waitFor(() => expect(onChanged).toHaveBeenCalledWith(expect.objectContaining({ type: 'saved', meta: expect.objectContaining({ keyId: 'alias/team-cmk' }) })))
+    expect(tab.el.querySelector('.overview').textContent).toContain('alias/team-cmk')
+    expect(tab.el.querySelector('.overview').textContent).toContain('Rotated by Terraform')
   })
 
   it('opens one dialog and writes once, however often save is triggered', async () => {

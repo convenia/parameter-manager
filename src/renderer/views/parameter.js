@@ -76,7 +76,8 @@ export function createParameterTab({ api, connection, meta: initialMeta, getSett
       if (destroyed) return
       current = value
       tags = tagList
-      meta = { ...meta, version: value.version, lastModifiedDate: value.lastModifiedDate }
+      // The list entry may be stale; GetParameter is the fresh read of type and version.
+      meta = { ...meta, type: value.type, version: value.version, lastModifiedDate: value.lastModifiedDate }
       renderHeader()
       renderOverview()
       renderValue()
@@ -143,10 +144,11 @@ export function createParameterTab({ api, connection, meta: initialMeta, getSett
       if (!choice) return
       const result = await putWithConflictHandling(text, choice.upgrade ? 'Advanced' : meta.tier)
       if (!result) return
-      meta = { ...meta, tier: result.tier, version: result.version }
+      // Main returns the parameter's stored metadata after the write (KMS key, description, …).
+      meta = result.meta ? { ...meta, ...result.meta } : { ...meta, tier: result.tier, version: result.version }
       await reloadValue()
       toast({ kind: 'success', message: `Saved ${meta.name} as version ${result.version}.` })
-      onChanged({ type: 'saved', name: meta.name, version: result.version })
+      onChanged({ type: 'saved', name: meta.name, version: result.version, meta: { ...meta } })
     } catch (err) {
       handleError(err, 'Save failed')
     } finally {

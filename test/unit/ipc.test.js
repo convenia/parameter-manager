@@ -90,7 +90,7 @@ describe('handlers', () => {
 
   it('ssm:put writes through and returns the new version', async () => {
     const { conn, call } = setup()
-    expect(await call(API.ssm.put, conn.id, putInput())).toEqual({ ok: true, data: { version: 2, tier: 'Standard' } })
+    expect(await call(API.ssm.put, conn.id, putInput())).toMatchObject({ ok: true, data: { version: 2, tier: 'Standard', meta: { name: '/myapp/dev/env', version: 2 } } })
   })
 
   it('refuses writes on read-only connections and leaves data untouched', async () => {
