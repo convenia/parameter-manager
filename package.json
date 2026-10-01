@@ -3,6 +3,7 @@
   "productName": "Vault Manager",
   "version": "0.1.0",
   "description": "Desktop client for AWS SSM Parameter Store",
+  "homepage": "https://vault-manager.invalid",
   "private": true,
   "type": "module",
   "main": "./out/main/index.js",
