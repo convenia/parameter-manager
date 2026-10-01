@@ -1,0 +1,42 @@
+.env-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--editor-bg);
+}
+.editor-notice {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--tint-yellow-border);
+  background: var(--tint-yellow-bg);
+  color: var(--tint-yellow-text);
+  font-size: 12px;
+}
+.editor-host {
+  flex: 1;
+  min-height: 0;
+}
+.editor-host .cm-editor {
+  height: 100%;
+}
+.editor-status {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--editor-gutter-bg);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.editor-status__bytes.is-over {
+  color: var(--danger);
+  font-weight: 600;
+}
+.cm-tooltip.cm-tooltip-lint {
+  font-family: var(--font-sans);
+}
