@@ -143,6 +143,14 @@ export function renderWorkspace(root, { api, connection, getSettings, openSettin
   }
 
   async function onParameterChanged(id, event) {
+    if (event.type === 'saved' && event.meta) {
+      // Spec §5.4: refresh just the saved row. Re-listing costs one DescribeParameters call
+      // per 50 parameters and flashes the table on large accounts.
+      rows = rows.map((row) => (row.name === event.name ? { ...row, ...event.meta } : row))
+      parametersTab.setRows(rows)
+      tree.setRows(rows)
+      return
+    }
     // A parameter deleted elsewhere keeps its tab while it holds unsaved text, so nothing is lost.
     const keepOpen = event.type === 'missing' && panels.get(id)?.isDirty?.()
     if (keepOpen) toast({ kind: 'warning', message: `${event.name} no longer exists. Your unsaved text is still in its tab.`, timeout: 0 })

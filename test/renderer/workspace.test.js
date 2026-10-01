@@ -87,6 +87,20 @@ describe('renderWorkspace', () => {
     expect(ws.hasUnsavedChanges()).toBe(false)
   })
 
+  it('refreshes only the saved row instead of re-listing the account', async () => {
+    const { api, root } = setup()
+    api.ssm.put.mockResolvedValue({ version: 2, tier: 'Standard', meta: { ...meta('/myapp/prod/env', 'SecureString'), version: 2 } })
+    api.ssm.get.mockImplementation(async (_c, name) => ({ name, type: 'SecureString', value: 'A=1', version: api.ssm.put.mock.calls.length + 1, lastModifiedDate: null, dataType: 'text', arn: 'arn' }))
+    await loaded(root)
+    await openRow(root, '/myapp/prod/env')
+    edit(root)
+    root.querySelector('.param:not([hidden]) [data-action="save"]').click()
+    await vi.waitFor(() => expect(document.querySelector('.modal [data-action="confirm"]')).not.toBeNull())
+    document.querySelector('.modal [data-action="confirm"]').click()
+    await vi.waitFor(() => expect(root.querySelector('.data-row[data-name="/myapp/prod/env"] .num').textContent).toBe('2'))
+    expect(api.ssm.list).toHaveBeenCalledTimes(1)
+  })
+
   it('filters the table when a folder is selected in the tree', async () => {
     const { root } = setup()
     await loaded(root)
