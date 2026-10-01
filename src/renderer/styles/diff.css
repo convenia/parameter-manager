@@ -1,0 +1,114 @@
+.diff {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.diff__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.diff-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.diff-chip--added,
+.diff-chip--onlyB {
+  background: var(--diff-added-bg);
+  color: var(--diff-added-text);
+}
+.diff-chip--changed,
+.diff-chip--different {
+  background: var(--diff-changed-bg);
+  color: var(--diff-changed-text);
+}
+.diff-chip--removed,
+.diff-chip--onlyA {
+  background: var(--diff-removed-bg);
+  color: var(--diff-removed-text);
+}
+.diff-chip--equal {
+  background: var(--bg-muted);
+  color: var(--text-muted);
+}
+.diff__unchanged,
+.diff__empty,
+.diff__note {
+  color: var(--text-muted);
+}
+.diff__table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.diff__table th {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-strong);
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-align: left;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.diff__table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.diff__kind-col {
+  width: 96px;
+}
+.diff__eye-col {
+  width: 44px;
+}
+.diff__key {
+  font-weight: 600;
+}
+.diff-kind {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.diff-kind--added,
+.diff-kind--onlyB {
+  color: var(--diff-added-text);
+}
+.diff-kind--changed,
+.diff-kind--different {
+  color: var(--diff-changed-text);
+}
+.diff-kind--removed,
+.diff-kind--onlyA {
+  color: var(--diff-removed-text);
+}
+.diff-kind--equal {
+  color: var(--text-muted);
+}
+.diff__masked {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 24px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+}
+.diff__merge {
+  max-height: 50vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
