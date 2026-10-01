@@ -9,6 +9,10 @@ export const COLUMNS = Object.freeze([
   { key: 'description', label: 'Description' }
 ])
 
+// One shared collator: String.prototype.localeCompare with options builds a new one per call,
+// which made sorting a few thousand rows take hundreds of milliseconds.
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
+
 export function filterRows(rows, { query = '', prefix = '' } = {}) {
   const q = query.trim().toLowerCase()
   const folder = prefix && !prefix.endsWith('/') ? `${prefix}/` : prefix
@@ -38,5 +42,5 @@ function isEmpty(value) {
 function compareValues(a, b, column) {
   if (column === 'version') return Number(a) - Number(b)
   if (column === 'lastModifiedDate') return Date.parse(a) - Date.parse(b)
-  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' })
+  return collator.compare(String(a), String(b))
 }

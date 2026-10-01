@@ -42,6 +42,13 @@ describe('sortRows', () => {
     expect(names(sortRows(rows, 'lastModifiedDate', 'desc'))).toEqual(['/a/one', '/ab/x', '/b/two', 'legacy'])
   })
 
+  it('sorts 20,000 rows by name fast enough to run on every keystroke', () => {
+    const big = Array.from({ length: 20000 }, (_, i) => ({ name: `/svc${i % 97}/env${(i * 7919) % 20000}/param-${i}` }))
+    const start = performance.now()
+    sortRows(big, 'name')
+    expect(performance.now() - start).toBeLessThan(300)
+  })
+
   it('sorts text with natural ordering and does not mutate the input', () => {
     const copy = [...rows]
     expect(names(sortRows(rows, 'name'))).toEqual(['/a/one', '/ab/x', '/b/two', 'legacy'])
