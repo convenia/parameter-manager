@@ -1,0 +1,39 @@
+.compare {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px;
+}
+.compare__pickers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.compare__picker {
+  flex: 1;
+  display: grid;
+  grid-template-columns: auto 200px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 380px;
+}
+.compare__label {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--black);
+  color: var(--white);
+  font-size: 12px;
+  font-weight: 700;
+}
+:root[data-theme='dark'] .compare__label {
+  background: var(--gray-light2);
+  color: var(--black);
+}
+.compare__vs {
+  color: var(--text-muted);
+  font-weight: 600;
+}
