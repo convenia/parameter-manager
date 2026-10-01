@@ -86,12 +86,14 @@ describe('loading', () => {
     expect(view(tab).state.readOnly).toBe(true)
   })
 
-  it('still loads when reading tags is not allowed', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+  it('still loads when reading tags is not allowed, and says so in the overview instead of a toast', async () => {
     const tags = vi.fn(async () => Promise.reject(Object.assign(new Error('Not allowed to read the tags of /myapp/prod/env.'), { code: 'AccessDenied' })))
     const { tab } = setup({ tags })
     await ready(tab)
-    expect(document.querySelector('.toast--error').textContent).toContain('Could not load tags')
+    expect(document.querySelector('.toast--error')).toBeNull()
+    const unavailable = tab.el.querySelector('.overview .tags-unavailable')
+    expect(unavailable.textContent).toBe('Unavailable')
+    expect(unavailable.title).toBe('Not allowed to read the tags of /myapp/prod/env.')
   })
 })
 

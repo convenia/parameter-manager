@@ -16,6 +16,7 @@ export function createParameterTab({ api, connection, meta: initialMeta, getSett
   let meta = { ...initialMeta }
   let current = null // the last value read from AWS: { value (null while encrypted), version, arn, … }
   let tags = []
+  let tagsError = null // shown in the overview: least-privilege profiles often lack ssm:ListTagsForResource
   let editor = null
   let history = null
   let saving = false
@@ -69,7 +70,7 @@ export function createParameterTab({ api, connection, meta: initialMeta, getSett
       const [value, tagList] = await Promise.all([
         api.ssm.get(connection.id, meta.name, { decrypt }),
         api.ssm.tags(connection.id, meta.name).catch((err) => {
-          toastError(err, 'Could not load tags')
+          tagsError = err
           return []
         })
       ])
@@ -274,7 +275,11 @@ export function createParameterTab({ api, connection, meta: initialMeta, getSett
 
   function renderOverview() {
     const item = (label, value, cls) => [h('dt', {}, label), h('dd', { class: cls }, value || h('span', { class: 'muted' }, '—'))]
-    const tagList = tags.length ? h('span', { class: 'tag-list' }, tags.map((t) => h('span', { class: 'tag' }, h('strong', {}, t.key), t.value ? ` = ${t.value}` : ''))) : null
+    const tagList = tagsError
+      ? h('span', { class: 'muted tags-unavailable', title: tagsError.message }, 'Unavailable')
+      : tags.length
+        ? h('span', { class: 'tag-list' }, tags.map((t) => h('span', { class: 'tag' }, h('strong', {}, t.key), t.value ? ` = ${t.value}` : '')))
+        : null
     overview.replaceChildren(
       ...item('ARN', current?.arn, 'mono break'),
       ...item('Description', meta.description),
