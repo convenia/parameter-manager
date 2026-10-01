@@ -3,6 +3,7 @@ import './styles/base.css'
 import { DEFAULT_SETTINGS } from '@shared/settings.js'
 import { createApi } from './api.js'
 import { h } from './lib/dom.js'
+import { installUnloadGuard } from './lib/unload-guard.js'
 import { applyTheme } from './theme.js'
 import { confirmDialog } from './components/modal.js'
 import { mountToasts, toast, toastError } from './components/toast.js'
@@ -58,6 +59,7 @@ function showWorkspace(connection) {
 
 async function start() {
   mountToasts()
+  installUnloadGuard(() => Boolean(workspace?.hasUnsavedChanges()))
   applySettings(settings)
   try {
     const [info, loaded] = await Promise.all([api.app.info(), api.settings.get()])

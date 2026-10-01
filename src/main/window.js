@@ -1,7 +1,8 @@
-import { BrowserWindow, Menu } from 'electron'
+import { BrowserWindow, Menu, dialog } from 'electron'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isAllowedNavigation } from './navigation.js'
+import { confirmUnload } from './unload.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -41,6 +42,7 @@ export function createMainWindow() {
   win.webContents.on('will-navigate', (event, url) => {
     if (!isAllowedNavigation(url, devServerUrl)) event.preventDefault()
   })
+  win.webContents.on('will-prevent-unload', (event) => confirmUnload(event, (options) => dialog.showMessageBoxSync(win, options)))
 
   if (devServerUrl) win.loadURL(devServerUrl)
   else win.loadFile(join(here, '../renderer/index.html'))
