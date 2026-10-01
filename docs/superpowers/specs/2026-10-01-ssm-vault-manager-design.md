@@ -30,6 +30,8 @@ the MongoDB Compass visual design.
 - **Stack:** plain vanilla JavaScript — no TypeScript, no UI framework. DOM + plain CSS.
 - **Bundler:** electron-vite (Vite) builds the main, preload, and renderer targets from one
   config, with a dev server and hot reload for the renderer.
+- **Editor:** CodeMirror 6 (the editor Compass uses) for the `.env` editor and the
+  line-level diff view.
 
 ### Success criteria
 
@@ -85,10 +87,15 @@ prompts, multiple windows, AWS Secrets Manager, auto-update, code signing.
   `'self'`-only.
 - Hardening: `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`,
   `will-navigate` blocked, `setWindowOpenHandler` denies everything, no remote content.
-- Runtime dependencies: `@aws-sdk/client-ssm`, `@aws-sdk/credential-providers`,
-  `@aws-sdk/shared-ini-file-loader`. Dev dependencies: `electron`, `electron-vite`,
-  `vite`, `electron-builder`, `vitest`, `jsdom`, `aws-sdk-client-mock`,
-  `@playwright/test`.
+- `dependencies` (main process, externalized, shipped in the package):
+  `@aws-sdk/client-ssm`, `@aws-sdk/credential-providers`,
+  `@aws-sdk/shared-ini-file-loader`.
+- `devDependencies`:
+  - renderer libraries, which Vite bundles so they don't ship separately: `codemirror`,
+    `@codemirror/state`, `@codemirror/view`, `@codemirror/language`, `@codemirror/lint`,
+    `@codemirror/merge`, `@lezer/highlight`
+  - tooling: `electron`, `electron-vite`, `vite`, `electron-builder`, `vitest`, `jsdom`,
+    `aws-sdk-client-mock`, `@playwright/test`
 
 ### Source layout
 
@@ -111,7 +118,7 @@ src/
     preload.js         window.vault bridge (built to CJS)
   shared/
     env.js             .env parse + validation
-    diff.js            key-level diff, line diff, compare
+    diff.js            key-level diff (or line-mode fallback flag), compare
     names.js           parameter name validation, tier byte limits
     tree.js            build sidebar tree from parameter names
     table.js           sort/filter/search for the parameter table
@@ -128,8 +135,9 @@ src/
     views/parameter.js    parameter tab (overview, editor, history)
     views/compare.js      compare tab
     views/settings.js     settings modal
-    components/env-editor.js  textarea + gutter + highlight overlay + warnings
-    components/diff-view.js   key diff / line diff rendering with masking
+    components/env-editor.js  CodeMirror 6 editor: setup, linter, byte status, Mod-S
+    components/env-language.js .env StreamLanguage tokenizer + Compass highlight style + theme
+    components/diff-view.js   key diff table with masking; line mode via @codemirror/merge
     components/modal.js       modal + type-to-confirm
     components/toast.js       toasts
     components/icons.js       inline SVG icons
@@ -261,29 +269,45 @@ Modelled on the Compass connect screen.
 
 #### Env editor (`components/env-editor.js`)
 
-- A `<textarea>` over a highlighted `<pre>` overlay with a line-number gutter and
-  scroll sync. Highlighting covers keys, `=`, values, comments, and invalid lines.
-- Warnings (non-blocking) list invalid lines and duplicate keys with line numbers. A
-  value that isn't `.env` at all (e.g. a JSON or plain string parameter) shows a single
-  "Not in .env format — editing as plain text" notice.
-- A byte counter shows UTF-8 bytes against the tier limit (Standard 4096 B,
-  Advanced 8192 B) and turns red when over.
+- CodeMirror 6 with `basicSetup` (line numbers, undo/redo history, search `Mod-F`,
+  active-line highlight, bracket matching). Autocompletion is turned off.
+- `.env` language (`env-language.js`): a `StreamLanguage` tokenizer that follows the
+  §6 parse rules. Token kinds: comment, `export` keyword, key, `=` operator, unquoted
+  value, quoted string, escape, and invalid line. A `HighlightStyle` and
+  `EditorView.theme` use the Compass palette through CSS variables, so switching
+  light/dark needs no editor reconfiguration.
+- Warnings use `@codemirror/lint` with `lintGutter()`. A pure function
+  `envDiagnostics(text)` turns `shared/env.js` warnings (invalid line, duplicate key)
+  into warning-severity diagnostics on the offending line. These never block saving. A
+  value that isn't `.env` at all (e.g. JSON or a plain string) shows a single "Not in
+  .env format — editing as plain text" notice above the editor instead of
+  per-line warnings.
+- A status bar under the editor shows the line count and UTF-8 bytes against the tier
+  limit (Standard 4096 B, Advanced 8192 B), turning red when over. It is updated from an
+  `EditorView.updateListener`.
+- `Mod-S` (registered with `Prec.highest`) starts the save flow. The component reports
+  `dirty` by comparing the document with the loaded value.
+- For read-only connections the editor uses `EditorState.readOnly` and
+  `EditorView.editable.of(false)`.
 - The raw text the user typed is exactly what gets saved. Parsing is only used for
   validation, diff, and compare; the app never re-serializes the user's text.
 
 #### Save flow
 
-1. If the value is over the Standard limit on a Standard parameter, the save dialog
-   offers "Upgrade to Advanced tier (charges apply)". Without that, save is blocked. Over
-   the Advanced limit, save is always blocked.
-2. The service checks `expectedVersion` (the version the tab loaded). On
-   `VersionConflict` a dialog offers **Reload** (discard local edits and load the latest)
-   or **Overwrite anyway** (save without the version check).
-3. A diff dialog shows key-level changes: added, changed, removed, plus an unchanged
-   count. Values are masked when `maskValuesInDiff` is on, with per-row and global reveal.
-   If either side isn't valid `.env`, a line diff is shown instead.
-4. On confirm: `PutParameter` with `Overwrite: true`. On success, the tab reloads the new
-   version, shows a toast ("Saved version 8"), and refreshes the list row.
+1. **Size check.** Over the Advanced limit, save is blocked. Over the Standard limit on a
+   Standard parameter, the diff dialog shows a required checkbox: "Upgrade to Advanced
+   tier (charges apply)".
+2. **Diff dialog.** Shows key-level changes: added, changed, removed, plus an unchanged
+   count. Values are masked when `maskValuesInDiff` is on, with per-row and global
+   reveal. If either side isn't valid `.env`, a side-by-side line diff
+   (`@codemirror/merge` `MergeView`, read-only) is shown instead, hidden behind a
+   **Reveal** button while masking is on.
+3. **Put.** On confirm: `PutParameter` with `Overwrite: true` and `expectedVersion` (the
+   version the tab loaded). On `VersionConflict`, a dialog offers **Reload** (discard local
+   edits and load the latest) or **Overwrite anyway** (repeat the put without the version
+   check).
+4. **Success.** The tab reloads the new version, shows a toast ("Saved version 8"), and
+   refreshes the list row.
 
 #### History sub-tab
 
@@ -338,10 +362,11 @@ cache and reloads profiles.
 ### Diff and compare (`shared/diff.js`)
 
 - `diffEnv(oldText, newText)` → `{ mode: 'keys', added, removed, changed, unchanged }`,
-  or `{ mode: 'lines', hunks }` when either side has `isEnv === false`.
+  or `{ mode: 'lines', oldText, newText, identical }` when either side has
+  `isEnv === false`. In line mode the diff view renders the two texts with
+  `@codemirror/merge`, so no line-diff algorithm lives in `shared/`.
 - `compareEnv(aText, bText)` → `{ onlyA, onlyB, different, equal }`, each a list of
   `{ key, a, b }`.
-- The line diff is an LCS-based line diff (inputs are at most 8 KB, so O(n·m) is fine).
 
 ### Names and limits (`shared/names.js`)
 
@@ -417,8 +442,10 @@ The real Parameter Store is never contacted by any automated test.
   - `fake-ssm-service.test.js`: versions increment, history kept, conflict detection, delete, not-found
   - `ipc.test.js`: envelope shape, read-only enforcement, input validation (handlers called directly with a stub service)
 - **Renderer components (Vitest + jsdom):**
-  - `env-editor.test.js`: renders lines and gutter, shows warnings, byte counter turns red over limit, emits change/dirty
-  - `diff-view.test.js`: key rows per bucket, masking and reveal, line-diff mode
+  - `env-language.test.js`: tokenizer output for each token kind, including multiline double-quoted values
+  - `env-diagnostics.test.js`: `envDiagnostics()` positions and messages for invalid lines and duplicate keys, none for valid text
+  - `env-editor.test.js`: mounts in jsdom (with the `Range`/`getClientRects` stubs CodeMirror needs), status bar bytes and over-limit state, `dirty` flag, read-only mode rejects edits
+  - `diff-view.test.js`: key rows per bucket, masking and reveal, line mode mounts a `MergeView`
   - `modal.test.js`: type-to-confirm keeps the button disabled until the exact name is typed
   - `api.test.js`: envelope unwrapping and error → toast routing with a stubbed `window.vault`
 - **E2E (`npm run test:e2e`):** builds with `electron-vite build`, then Playwright `_electron`
