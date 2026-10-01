@@ -1,0 +1,160 @@
+.parameters {
+  display: flex;
+  flex-direction: column;
+}
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 60px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+.toolbar__title {
+  font-size: 16px;
+}
+.parameters__count {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.prefix-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 4px 0 8px;
+  border-radius: 999px;
+  background: var(--tint-green-bg);
+  color: var(--tint-green-text);
+}
+.prefix-chip__clear {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.search-box {
+  position: relative;
+  width: 280px;
+}
+.search-box > .icon {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  color: var(--text-subtle);
+  transform: translateY(-50%);
+}
+.input--search {
+  height: 32px;
+  padding-left: 30px;
+}
+.table-wrap {
+  padding: 0 20px;
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.data-table th {
+  position: sticky;
+  top: 60px;
+  z-index: 2;
+  padding: 0;
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--bg);
+  text-align: left;
+}
+.th-sort {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: left;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.th-sort:hover,
+.is-sorted .th-sort {
+  color: var(--text);
+}
+.data-table td {
+  padding: 9px 10px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.data-row {
+  cursor: pointer;
+}
+.data-row:hover td,
+.data-row:focus-visible td {
+  background: var(--bg-subtle);
+}
+.data-row:focus-visible {
+  box-shadow: none;
+}
+.col-name {
+  color: var(--text);
+  font-weight: 600;
+}
+th.col-name {
+  width: 25%;
+}
+th.col-tier {
+  width: 10%;
+}
+th.col-type {
+  width: 14%;
+}
+th.col-dataType {
+  width: 7%;
+}
+th.col-version {
+  width: 7%;
+}
+th.col-lastModifiedDate {
+  width: 14%;
+}
+th.col-lastModifiedUser {
+  width: 11%;
+}
+th.col-description {
+  width: 12%;
+}
+.num {
+  font-variant-numeric: tabular-nums;
+}
+.empty-row td {
+  padding: 0;
+}
+.skeleton-row td {
+  padding: 14px 10px;
+}
+.parameters__footer {
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+}
+.parameters__footer:empty {
+  display: none;
+}
