@@ -50,7 +50,7 @@ prompts, multiple windows, AWS Secrets Manager, auto-update, code signing.
 
 ```
 ┌──────────────────────────── Electron main process (ESM) ───────────────────────────┐
-│ main.js ── app lifecycle, BrowserWindow, dev-server/file loading, hardening        │
+│ index.js ── app lifecycle + wiring; window.js ── window, menu, hardening            │
 │ ipc.js  ── registers channels, wraps every handler in { ok, data | error }         │
 │   ├─ store.js        connections.json + settings.json in app.getPath('userData')  │
 │   ├─ profiles.js     reads ~/.aws/config + ~/.aws/credentials (profile names)     │
@@ -60,7 +60,7 @@ prompts, multiple windows, AWS Secrets Manager, auto-update, code signing.
 │   └─ errors.js       AWS/SDK errors → { code, message, hint }                     │
 └────────────────────────────────────────────────────────────────────────────────────┘
                  ▲ ipcRenderer.invoke (contextIsolation, sandbox, no nodeIntegration)
-┌─ preload.js (built to CJS) ── contextBridge exposes window.vault (fixed methods) ──┐
+┌─ preload/index.js (built to CJS) ── contextBridge exposes window.vault ────────────┐
 └────────────────────────────────────────────────────────────────────────────────────┘
                  ▼
 ┌─ Renderer (Vite-bundled; dev server in dev, out/renderer/index.html in prod) ──────┐
@@ -89,63 +89,39 @@ prompts, multiple windows, AWS Secrets Manager, auto-update, code signing.
   `will-navigate` blocked, `setWindowOpenHandler` denies everything, no remote content.
 - `dependencies` (main process, externalized, shipped in the package):
   `@aws-sdk/client-ssm`, `@aws-sdk/credential-providers`,
-  `@aws-sdk/shared-ini-file-loader`.
+  `@smithy/shared-ini-file-loader` (the maintained successor of the deprecated
+  `@aws-sdk/shared-ini-file-loader`).
 - `devDependencies`:
   - renderer libraries, which Vite bundles so they don't ship separately: `codemirror`,
     `@codemirror/state`, `@codemirror/view`, `@codemirror/language`, `@codemirror/lint`,
-    `@codemirror/merge`, `@lezer/highlight`
+    `@codemirror/merge`, `@codemirror/search`, `@lezer/highlight`, and
+    `@fontsource/source-code-pro` (the monospace face Compass uses)
   - tooling: `electron`, `electron-vite`, `vite`, `electron-builder`, `vitest`, `jsdom`,
     `aws-sdk-client-mock`, `@playwright/test`
 
 ### Source layout
 
 ```
-package.json
-electron.vite.config.js   main / preload / renderer build config, @shared alias
-vitest.config.js          node env by default, jsdom for renderer tests, @shared alias
-electron-builder.yml      Linux AppImage + deb
+package.json, electron.vite.config.js, vitest.config.js, playwright.config.js, electron-builder.yml
 src/
-  main/
-    main.js            app lifecycle, window, dev-server/file loading, hardening
-    ipc.js             channel registration + result envelope
-    store.js           connections + settings persistence
-    profiles.js        AWS profile discovery
-    clients.js         per-connection service cache, fake/real switch
-    ssm-service.js     real SSM implementation
-    fake-ssm-service.js in-memory implementation + seed data
-    errors.js          error normalisation
-  preload/
-    preload.js         window.vault bridge (built to CJS)
-  shared/
-    env.js             .env parse + validation
-    diff.js            key-level diff (or line-mode fallback flag), compare
-    names.js           parameter name validation, tier byte limits
-    tree.js            build sidebar tree from parameter names
-    table.js           sort/filter/search for the parameter table
-  renderer/
-    index.html
-    app.js             entry: imports styles, router (connections ↔ workspace), tabs
-    state.js           tiny pub/sub store
-    api.js             thin wrapper over window.vault, unwraps envelopes → throws/toasts
-    styles/tokens.css  Compass palette + light/dark themes
-    styles/app.css     layout + components
-    views/connections.js  connections screen (list + form)
-    views/workspace.js    sidebar + tab strip
-    views/parameters.js   parameters table tab
-    views/parameter.js    parameter tab (overview, editor, history)
-    views/compare.js      compare tab
-    views/settings.js     settings modal
-    components/env-editor.js  CodeMirror 6 editor: setup, linter, byte status, Mod-S
-    components/env-language.js .env StreamLanguage tokenizer + Compass highlight style + theme
-    components/diff-view.js   key diff table with masking; line mode via @codemirror/merge
-    components/modal.js       modal + type-to-confirm
-    components/toast.js       toasts
-    components/icons.js       inline SVG icons
+  main/       index.js (lifecycle + wiring), window.js (window, menu, hardening),
+              navigation.js (allowed-navigation check), errors.js, store.js, profiles.js,
+              ssm-service.js, fake-seed.js, fake-ssm-service.js, clients.js, ipc.js
+  preload/    index.js (window.vault bridge, built to CJS)
+  shared/     channels.js (IPC surface), env.js, diff.js, names.js, format.js,
+              settings.js (defaults, themes, colors), tree.js, table.js
+  renderer/   index.html, app.js (shell + routing), api.js, theme.js, tabs.js (tab model)
+    lib/        dom.js (h() helper), form.js, regions.js, save-plan.js
+    components/ icons.js, badges.js, toast.js, modal.js, env-language.js, env-lint.js,
+                env-editor.js, diff-view.js
+    views/      connections.js, workspace.js, sidebar-tree.js, parameters.js, parameter.js,
+                history-panel.js, create-parameter.js, compare.js, settings.js
+    styles/     tokens.css, base.css, plus one stylesheet per view or component
 test/
-  unit/*.test.js       Vitest suites (main + shared, node env)
-  renderer/*.test.js   Vitest suites (components, jsdom env)
-  fixtures/aws/        fake config/credentials ini files
-  e2e/smoke.spec.js    Playwright _electron against fake backend
+  setup.js, fixtures/aws/
+  unit/*.test.js       Vitest, node environment (main + shared)
+  renderer/*.test.js   Vitest, jsdom for DOM tests (components and views)
+  e2e/*.spec.js        Playwright _electron against the fake backend
 ```
 
 ## 3. Data model
@@ -232,7 +208,8 @@ Modelled on the Compass connect screen.
 - **Right:** the connection form. Fields: name, profile (dropdown from `profiles.list()`,
   with the profile's default region pre-filled), region (dropdown of SSM regions plus free
   text), path prefix, color swatches, read-only toggle. Buttons: **Test connection**,
-  **Save**, **Save & Connect**, **Connect**.
+  **Save**, and **Connect**. Connect saves pending edits first, and is labelled
+  **Save & connect** for a new connection.
 - A banner shows when no AWS profiles are found, with the file paths that were checked.
 
 ### 5.2 Workspace
@@ -269,8 +246,9 @@ Modelled on the Compass connect screen.
 
 #### Env editor (`components/env-editor.js`)
 
-- CodeMirror 6 with `basicSetup` (line numbers, undo/redo history, search `Mod-F`,
-  active-line highlight, bracket matching). Autocompletion is turned off.
+- CodeMirror 6 with `minimalSetup` (undo/redo history, special characters, selection)
+  plus line numbers, active-line highlight, search (`Mod-F`), and selection-match
+  highlight. There is no autocompletion.
 - `.env` language (`env-language.js`): a `StreamLanguage` tokenizer that follows the
   §6 parse rules. Token kinds: comment, `export` keyword, key, `=` operator, unquoted
   value, quoted string, escape, and invalid line. A `HighlightStyle` and
@@ -394,7 +372,7 @@ cache and reloads profiles.
 | `ExpiredTokenException`, `ExpiredToken` | `ExpiredCredentials` | hint: refresh credentials for profile X (`aws sso login --profile X` for SSO) |
 | `CredentialsProviderError` / profile not found | `CredentialsError` | hint: check the profile in Settings → AWS files |
 | `UnrecognizedClientException`, `InvalidSignatureException` | `InvalidCredentials` | hint: keys are wrong or revoked |
-| `ParameterNotFound` | `ParameterNotFound` | the list refreshes and the tab offers to close |
+| `ParameterNotFound` | `ParameterNotFound` | the list refreshes; the tab closes unless it still holds unsaved text |
 | `ParameterAlreadyExists` | `ParameterAlreadyExists` | shown on the name field |
 | `ParameterMaxVersionLimitExceeded` | `MaxVersionLimit` | hint: 100-version limit reached and the oldest version has a label; move the label in the console |
 | `ValidationException`, `ParameterPatternMismatchException` | `ValidationError` | AWS message passed through |
@@ -419,12 +397,12 @@ cache and reloads profiles.
 - Light theme: a white content area, `light3` panels, a dark navy sidebar. Dark theme:
   `#001E2B` content and `#112733` panels. `theme: system` follows
   `prefers-color-scheme`.
-- Typography: a system UI font stack (Compass's Euclid Circular A is proprietary), with
-  `Source Code Pro`-style monospace fallbacks (`ui-monospace, Menlo, Consolas`) for
-  names and the editor.
-- Components: pill-shaped buttons (primary green-dark2, secondary outline, danger red),
-  6 px radius inputs, a 3 px green focus ring, an active tab with a green bottom border,
-  badges, and toasts at the bottom left.
+- Typography: a system UI font stack (Compass's Euclid Circular A is proprietary), and
+  bundled Source Code Pro for names and the editor.
+- Components: 6 px radius buttons and inputs, as in LeafyGreen (primary green-dark2,
+  secondary outline, danger red), a 3 px green focus ring, an active tab with a green top
+  edge, uppercase pill badges, and toasts at the bottom left. Demo mode shows a thin
+  yellow bar across the top of the window.
 
 ## 9. Testing
 
@@ -443,21 +421,27 @@ The real Parameter Store is never contacted by any automated test.
   - `ipc.test.js`: envelope shape, read-only enforcement, input validation (handlers called directly with a stub service)
 - **Renderer components (Vitest + jsdom):**
   - `env-language.test.js`: tokenizer output for each token kind, including multiline double-quoted values
-  - `env-diagnostics.test.js`: `envDiagnostics()` positions and messages for invalid lines and duplicate keys, none for valid text
+  - `env-lint.test.js`: `envDiagnostics()` positions and messages for invalid lines and duplicate keys, none for valid text
   - `env-editor.test.js`: mounts in jsdom (with the `Range`/`getClientRects` stubs CodeMirror needs), status bar bytes and over-limit state, `dirty` flag, read-only mode rejects edits
   - `diff-view.test.js`: key rows per bucket, masking and reveal, line mode mounts a `MergeView`
   - `modal.test.js`: type-to-confirm keeps the button disabled until the exact name is typed
-  - `api.test.js`: envelope unwrapping and error → toast routing with a stubbed `window.vault`
+  - `api.test.js`: envelope unwrapping and `ApiError` mapping with a stubbed `window.vault`
+  - view tests (`connections`, `parameters`, `sidebar-tree`, `workspace`, `parameter`,
+    `history-panel`, `create-parameter`, `compare`, `settings`) drive each screen with a
+    stubbed API
 - **E2E (`npm run test:e2e`):** builds with `electron-vite build`, then Playwright `_electron`
   launches `out/main/index.js` with
-  `VAULT_FAKE_SSM=1` and an isolated `VAULT_USER_DATA` temp dir. It creates a
-  connection, connects, opens a parameter, edits one key, checks the diff shows exactly
-  one changed key, saves, and checks the version went up and the History tab lists the
-  previous version.
+  `VAULT_FAKE_SSM=1` and an isolated `VAULT_USER_DATA` temp dir. Four specs cover:
+  - edit one key, see a one-key diff, save, and check that the version went up and the
+    History tab lists the previous version
+  - a read-only connection offers no write actions
+  - create a parameter, then delete it
+  - compare production and staging
 - **Demo (`npm run demo`):** the app with `VAULT_FAKE_SSM=1`. The fake backend seeds
-  about 20 parameters across `/myapp/{dev,staging,prod}/…`, mixing String, StringList,
-  and SecureString, `.env` and non-`.env` values, and one near the 4 KB limit. It also
-  seeds two connections (`demo-staging`, `demo-prod` read-only).
+  19 parameters across `/myapp/{dev,staging,prod}/…` and a few other paths, mixing String,
+  StringList, and SecureString, `.env` and non-`.env` values, and one near the 4 KB limit.
+  It also seeds two connections: `demo-all` ("Demo — all parameters") and `demo-prod`
+  (read-only, prefix `/myapp/prod`).
 - **Manual (user):** against real AWS, per the user's instruction.
 
 ## 10. Scripts and packaging
