@@ -28,6 +28,8 @@ the MongoDB Compass visual design.
 - **Configuration model:** Compass-style saved connections (profile + region + options),
   plus global settings.
 - **Stack:** plain vanilla JavaScript — no TypeScript, no UI framework. DOM + plain CSS.
+- **Bundler:** electron-vite (Vite) builds the main, preload, and renderer targets from one
+  config, with a dev server and hot reload for the renderer.
 
 ### Success criteria
 
@@ -46,7 +48,7 @@ prompts, multiple windows, AWS Secrets Manager, auto-update, code signing.
 
 ```
 ┌──────────────────────────── Electron main process (ESM) ───────────────────────────┐
-│ main.js ── app lifecycle, BrowserWindow, app:// protocol, security hardening       │
+│ main.js ── app lifecycle, BrowserWindow, dev-server/file loading, hardening        │
 │ ipc.js  ── registers channels, wraps every handler in { ok, data | error }         │
 │   ├─ store.js        connections.json + settings.json in app.getPath('userData')  │
 │   ├─ profiles.js     reads ~/.aws/config + ~/.aws/credentials (profile names)     │
@@ -56,35 +58,48 @@ prompts, multiple windows, AWS Secrets Manager, auto-update, code signing.
 │   └─ errors.js       AWS/SDK errors → { code, message, hint }                     │
 └────────────────────────────────────────────────────────────────────────────────────┘
                  ▲ ipcRenderer.invoke (contextIsolation, sandbox, no nodeIntegration)
-┌─ preload.cjs ── contextBridge exposes window.vault (fixed list of methods) ────────┐
+┌─ preload.js (built to CJS) ── contextBridge exposes window.vault (fixed methods) ──┐
 └────────────────────────────────────────────────────────────────────────────────────┘
                  ▼
-┌─ Renderer (served from app://vault/, ES modules, no bundler) ──────────────────────┐
+┌─ Renderer (Vite-bundled; dev server in dev, out/renderer/index.html in prod) ──────┐
 │ renderer/index.html, renderer/app.js (router + state), views/*, components/*      │
 │ shared/*  pure logic used by renderer AND main AND tests (env, diff, names, tree)  │
 └────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- `package.json` has `"type": "module"`. Main-process and shared files are ESM `.js`;
-  the preload script is `preload.cjs` because sandboxed preloads must be CommonJS.
-- The renderer is served over a privileged custom protocol `app://vault/` registered with
-  `protocol.handle`. That makes ES-module imports work without a bundler and lets us
-  enforce a strict CSP (`default-src 'self'; script-src 'self'; style-src 'self';
-  img-src 'self' data:`). The handler serves only `src/renderer/` and `src/shared/` and
-  rejects path traversal.
+- All source is ESM `.js` (`"type": "module"`). electron-vite builds three targets into
+  `out/`:
+  - `out/main/`: the main process, ESM output. Runtime dependencies (the AWS SDK) are kept
+    external via `externalizeDepsPlugin` and loaded from `node_modules`, not bundled.
+  - `out/preload/`: the preload, **CommonJS** output (`preload.cjs`), because sandboxed
+    preloads can't be ESM.
+  - `out/renderer/`: the bundled HTML, JS, and CSS.
+- `src/shared/` is imported by main and renderer through a `@shared` alias defined once in
+  `electron.vite.config.js`. Vitest uses the same alias.
+- In development, main loads the renderer from the Vite dev server URL
+  (`process.env.ELECTRON_RENDERER_URL`) with hot reload. In production it uses
+  `loadFile('out/renderer/index.html')`.
+- CSP (meta tag in `index.html`): `default-src 'self'; script-src 'self';
+  style-src 'self' 'unsafe-inline'; img-src 'self' data:`. Vite injects styles as inline
+  `<style>` tags in dev, so `style-src` needs `'unsafe-inline'`; scripts stay
+  `'self'`-only.
 - Hardening: `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`,
   `will-navigate` blocked, `setWindowOpenHandler` denies everything, no remote content.
 - Runtime dependencies: `@aws-sdk/client-ssm`, `@aws-sdk/credential-providers`,
-  `@aws-sdk/shared-ini-file-loader`. Dev dependencies: `electron`, `electron-builder`,
-  `aws-sdk-client-mock`, `@playwright/test`.
+  `@aws-sdk/shared-ini-file-loader`. Dev dependencies: `electron`, `electron-vite`,
+  `vite`, `electron-builder`, `vitest`, `jsdom`, `aws-sdk-client-mock`,
+  `@playwright/test`.
 
 ### Source layout
 
 ```
 package.json
+electron.vite.config.js   main / preload / renderer build config, @shared alias
+vitest.config.js          node env by default, jsdom for renderer tests, @shared alias
+electron-builder.yml      Linux AppImage + deb
 src/
   main/
-    main.js            app lifecycle, window, protocol, hardening
+    main.js            app lifecycle, window, dev-server/file loading, hardening
     ipc.js             channel registration + result envelope
     store.js           connections + settings persistence
     profiles.js        AWS profile discovery
@@ -93,7 +108,7 @@ src/
     fake-ssm-service.js in-memory implementation + seed data
     errors.js          error normalisation
   preload/
-    preload.cjs        window.vault bridge
+    preload.js         window.vault bridge (built to CJS)
   shared/
     env.js             .env parse + validation
     diff.js            key-level diff, line diff, compare
@@ -102,7 +117,7 @@ src/
     table.js           sort/filter/search for the parameter table
   renderer/
     index.html
-    app.js             router (connections ↔ workspace), app state, tabs
+    app.js             entry: imports styles, router (connections ↔ workspace), tabs
     state.js           tiny pub/sub store
     api.js             thin wrapper over window.vault, unwraps envelopes → throws/toasts
     styles/tokens.css  Compass palette + light/dark themes
@@ -119,7 +134,8 @@ src/
     components/toast.js       toasts
     components/icons.js       inline SVG icons
 test/
-  unit/*.test.js       node:test suites
+  unit/*.test.js       Vitest suites (main + shared, node env)
+  renderer/*.test.js   Vitest suites (components, jsdom env)
   fixtures/aws/        fake config/credentials ini files
   e2e/smoke.spec.js    Playwright _electron against fake backend
 ```
@@ -389,7 +405,7 @@ cache and reloads profiles.
 
 The real Parameter Store is never contacted by any automated test.
 
-- **Unit (`node:test`, `npm test`):**
+- **Unit (Vitest, `npm test`):**
   - `env.test.js`: line kinds, quoting rules, multiline, duplicates, `isEnv`
   - `diff.test.js`: added/removed/changed/unchanged, line-diff fallback, compare buckets
   - `names.test.js`: valid/invalid names, reserved prefixes, depth, byte limits with multibyte chars
@@ -400,7 +416,13 @@ The real Parameter Store is never contacted by any automated test.
   - `ssm-service.test.js`: `aws-sdk-client-mock` covering pagination, prefix filter, decrypt flag, the put version check, keyId/type preservation on update, history ordering, tags
   - `fake-ssm-service.test.js`: versions increment, history kept, conflict detection, delete, not-found
   - `ipc.test.js`: envelope shape, read-only enforcement, input validation (handlers called directly with a stub service)
-- **E2E (`npm run test:e2e`):** Playwright `_electron` launches the app with
+- **Renderer components (Vitest + jsdom):**
+  - `env-editor.test.js`: renders lines and gutter, shows warnings, byte counter turns red over limit, emits change/dirty
+  - `diff-view.test.js`: key rows per bucket, masking and reveal, line-diff mode
+  - `modal.test.js`: type-to-confirm keeps the button disabled until the exact name is typed
+  - `api.test.js`: envelope unwrapping and error → toast routing with a stubbed `window.vault`
+- **E2E (`npm run test:e2e`):** builds with `electron-vite build`, then Playwright `_electron`
+  launches `out/main/index.js` with
   `VAULT_FAKE_SSM=1` and an isolated `VAULT_USER_DATA` temp dir. It creates a
   connection, connects, opens a parameter, edits one key, checks the diff shows exactly
   one changed key, saves, and checks the version went up and the History tab lists the
@@ -413,10 +435,13 @@ The real Parameter Store is never contacted by any automated test.
 
 ## 10. Scripts and packaging
 
-- `npm start`: run the app with real AWS.
-- `npm run demo`: run with the fake backend.
-- `npm test`: unit tests (`node --test test/unit`).
-- `npm run test:e2e`: Playwright Electron smoke test.
-- `npm run dist`: `electron-builder` for Linux AppImage + deb (the user is on Linux Mint).
+- `npm run dev`: `electron-vite dev` with real AWS and renderer hot reload.
+- `npm run demo`: `electron-vite dev` with `VAULT_FAKE_SSM=1`.
+- `npm run build`: `electron-vite build` into `out/`.
+- `npm start`: `electron-vite preview`, which runs the built app with real AWS.
+- `npm test`: `vitest run`.
+- `npm run test:e2e`: build, then the Playwright Electron smoke test.
+- `npm run dist`: build, then `electron-builder` for Linux AppImage + deb (the user is on
+  Linux Mint).
 - Environment variables: `VAULT_FAKE_SSM=1` swaps in the fake backend and fake profiles;
   `VAULT_USER_DATA=<dir>` overrides `app.getPath('userData')` (used by e2e for isolation).
