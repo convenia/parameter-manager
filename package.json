@@ -1,7 +1,7 @@
 {
   "name": "parameter-manager",
   "productName": "Parameter Manager",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Desktop client for AWS SSM Parameter Store",
   "homepage": "https://pmanager.l30.space",
   "private": true,
