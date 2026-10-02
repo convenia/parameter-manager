@@ -287,62 +287,6 @@ The `.deb` format requires a project homepage, so `package.json` contains
 `"homepage": "https://vault-manager.invalid"`. This is a deliberate placeholder on a reserved
 domain; replace it with the real URL once the project has one.
 
-## Manual checklist against real AWS
-
-Automated tests never call AWS. Before trusting a build, go through this list with a
-non-production profile:
-
-- [ ] Connections: profiles from both `config` and `credentials` appear; **Test connection** succeeds; a wrong region shows a clear error.
-- [ ] The list matches the AWS console: count, Name, Tier, Type, Data type, Version, Last modified, Last modified user, and Description.
-- [ ] Pagination: an account with more than 50 parameters lists all of them.
-- [ ] A path prefix on the connection limits the list.
-- [ ] Opening a SecureString shows the decrypted value. With **auto-decrypt** off it shows "Decrypt & show".
-- [ ] Editing and saving creates a new version in the console, with the same KMS key, description, and tier.
-- [ ] Editing the same parameter in the console while the tab is open, then saving, shows the conflict dialog.
-- [ ] Changing a parameter's KMS key or type in the console while the app is open, then saving from the app, keeps the console's KMS key and type.
-- [ ] A value over 4 KB on a Standard parameter asks to upgrade to Advanced, and the console shows Advanced afterwards.
-- [ ] An Advanced-tier SecureString with a customer-managed key saves (needs `kms:GenerateDataKey`).
-- [ ] A value with Windows line endings (CRLF) opens without being marked as changed.
-- [ ] A parameter with an expiration policy still has its policy after a save.
-- [ ] History lists every version. **Restore** puts an old value in the editor, and saving creates a new version.
-- [ ] Create and delete work, and deleting requires typing the full name.
-- [ ] Compare works across two connections that use different AWS accounts.
-- [ ] A read-only connection shows no Save, Create, or Delete actions.
-- [ ] A profile without `ssm:ListTagsForResource` shows tags as "Unavailable" and no error toast.
-- [ ] An expired SSO session shows the `aws sso login --profile …` hint.
-- [ ] A profile without `ssm:PutParameter` shows "Not allowed to write on …".
-- [ ] Editing a parameter and then closing the window shows the **Discard changes and close / Keep editing** prompt. The automated tests can't click through this native dialog.
-- [ ] The AppImage starts by itself, outside the development folder. If it doesn't on your distribution, install the `.deb`.
-
-## Design decisions
-
-These choices were made while building the app. Each one names its trade-off.
-
-- **Plain JavaScript, no framework.** This was a project requirement. The UI uses a small
-  `h()` helper, and type hints are JSDoc comments.
-- **The stored metadata wins on overwrite.** A save keeps the parameter's current type, KMS
-  key, description, allowed pattern, and data type as AWS holds them, and only the value
-  changes.
-  - *Trade-off:* the app can't change a parameter's type or KMS key. Do that in the console.
-  - *Trade-off:* before the first save, the overview's KMS key and description come from the
-    list, so they can be outdated until you press **Refresh**. Saves are safe either way.
-- **Only the saved row is refreshed after a save.**
-  - *Trade-off:* other rows changed by someone else stay stale until **Refresh**.
-- **Search runs on every keystroke, without a delay.** Filtering and sorting 20,000 rows takes
-  about 50 ms, and rendering is capped at 500 rows.
-  - *Trade-off:* typing may lag slightly on very slow machines.
-- **The window-close prompt is native.** The UI refuses to close while edits are unsaved, and
-  the main process asks with a dialog.
-  - *Trade-off:* the dialog is covered by unit tests and an e2e check of the refusal, but it
-    isn't clicked through automatically. It's on the manual checklist.
-- **The fake backend follows the real service's rules,** including real AWS error names, tier
-  limits, version checks, and stored-metadata overwrites, so demo mode behaves like AWS.
-- **The `.invalid` placeholder homepage.** It is used instead of a real-looking but invented
-  URL; see [Packaging](#packaging).
-- **The tests run with no AWS account at all.** The end-to-end tests were accepted after they
-  passed on their first run, because they had failed against a deliberately broken build
-  while the implementation plan was being validated.
-
 ## Known limitations
 
 ### Out of scope for this version
