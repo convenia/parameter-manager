@@ -23,7 +23,7 @@ export function renderConnectionsScreen(root, { api, onConnect, openSettings }) 
       h(
         'aside',
         { class: 'connections-sidebar' },
-        h('div', { class: 'brand' }, h('span', { class: 'brand__mark' }, icon('key', 18)), h('span', { class: 'brand__name' }, 'Vault Manager')),
+        h('div', { class: 'brand' }, h('span', { class: 'brand__mark' }, icon('key', 18)), h('span', { class: 'brand__name' }, 'Parameter Manager')),
         h('button', { class: 'btn btn--primary btn--block', type: 'button', dataset: { action: 'new' }, onClick: () => select(null) }, icon('plus', 14), 'New connection'),
         h('h3', { class: 'sidebar-heading' }, 'Saved connections'),
         list
@@ -152,7 +152,7 @@ export function renderConnectionsScreen(root, { api, onConnect, openSettings }) 
             connect()
           }
         },
-        h('header', { class: 'connection-card__header' }, h('h1', {}, isNew ? 'New connection' : 'Edit connection'), h('p', { class: 'muted' }, 'Connections use the AWS profiles on this machine. Vault Manager never stores credentials.')),
+        h('header', { class: 'connection-card__header' }, h('h1', {}, isNew ? 'New connection' : 'Edit connection'), h('p', { class: 'muted' }, 'Connections use the AWS profiles on this machine. Parameter Manager never stores credentials.')),
         banner,
         field('Name', h('input', { class: 'input', name: 'name', value: d.name, placeholder: 'e.g. Production', autocomplete: 'off', onInput: set('name') })),
         h(
@@ -235,7 +235,7 @@ export function renderConnectionsScreen(root, { api, onConnect, openSettings }) 
 
   async function remove(connection) {
     if (!connection) return
-    const confirmed = await confirmDialog({ title: 'Delete connection?', message: `"${connection.name}" will be removed from Vault Manager. Your AWS profile and parameters are not touched.`, confirmLabel: 'Delete', kind: 'danger' })
+    const confirmed = await confirmDialog({ title: 'Delete connection?', message: `"${connection.name}" will be removed from Parameter Manager. Your AWS profile and parameters are not touched.`, confirmLabel: 'Delete', kind: 'danger' })
     if (!confirmed) return
     try {
       await api.connections.delete(connection.id)

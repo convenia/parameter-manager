@@ -24,7 +24,7 @@ export function createMainWindow() {
     height: 820,
     minWidth: 960,
     minHeight: 600,
-    title: 'Vault Manager',
+    title: 'Parameter Manager',
     backgroundColor: '#001E2B',
     autoHideMenuBar: true,
     show: false,

@@ -1,5 +1,5 @@
-appId: com.vaultmanager.app
-productName: Vault Manager
+appId: com.parametermanager.app
+productName: Parameter Manager
 directories:
   output: dist
   buildResources: build

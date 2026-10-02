@@ -1,0 +1,2 @@
+# ai-devtools: ephemeral plugin state under any internal/ scope is never committed
+**/internal/

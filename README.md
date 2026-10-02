@@ -1,15 +1,12 @@
-# Vault Manager
+# Parameter Manager
 
-A desktop client for **AWS Systems Manager Parameter Store** that looks like MongoDB Compass.
+A desktop client for **AWS Systems Manager Parameter Store**.
 It lists every parameter with the same columns as the AWS console and edits values as `.env` text.
 It shows a diff before every save, browses version history, and compares two parameters, even
 across AWS accounts.
 
 It is written in plain JavaScript (no TypeScript, no UI framework) on Electron, electron-vite,
 CodeMirror 6, and the AWS SDK for JavaScript v3.
-
-- Design spec: [`docs/superpowers/specs/2026-10-01-ssm-vault-manager-design.md`](docs/superpowers/specs/2026-10-01-ssm-vault-manager-design.md)
-- Implementation plan: [`docs/superpowers/plans/2026-10-01-vault-manager.md`](docs/superpowers/plans/2026-10-01-vault-manager.md)
 
 ## Contents
 
@@ -30,7 +27,7 @@ CodeMirror 6, and the AWS SDK for JavaScript v3.
 
 ## Features
 
-- **Saved connections, as in Compass.** Each connection is an AWS profile plus a region, an
+- **Saved connections.** Each connection is an AWS profile plus a region, an
   optional path prefix, a color, and an optional **read-only** flag.
 - **A parameter list with the AWS console's columns:** Name, Tier, Type, Data type, Version,
   Last modified, Last modified user, and Description. It has search, sorting, and a path tree
@@ -242,7 +239,7 @@ parameter's stored metadata first.
 ## Security
 
 - Credentials stay in your AWS files. The app stores only connection names, profile names,
-  regions, and display settings, in Electron's `userData` folder (`~/.config/Vault Manager`
+  regions, and display settings, in Electron's `userData` folder (`~/.config/Parameter Manager`
   on Linux). Files are written atomically with mode `0600`. An unreadable file is renamed to
   `*.corrupt-<timestamp>`, defaults are used, and a warning is shown.
 - Only the main process talks to AWS. The UI runs with `contextIsolation`, `sandbox`, and no
@@ -280,12 +277,11 @@ These risky inputs have dedicated tests:
 
 ## Packaging
 
-`npm run dist` builds `dist/Vault Manager-<version>.AppImage` and
-`dist/vault-manager_<version>_amd64.deb`.
+`npm run dist` builds `dist/Parameter Manager-<version>.AppImage` and
+`dist/parameter-manager_<version>_amd64.deb`.
 
 The `.deb` format requires a project homepage, so `package.json` contains
-`"homepage": "https://vault-manager.invalid"`. This is a deliberate placeholder on a reserved
-domain; replace it with the real URL once the project has one.
+`"homepage": "https://pmanager.l30.space"`.
 
 ## Known limitations
 

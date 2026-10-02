@@ -1,9 +1,9 @@
 {
-  "name": "vault-manager",
-  "productName": "Vault Manager",
+  "name": "parameter-manager",
+  "productName": "Parameter Manager",
   "version": "0.1.0",
   "description": "Desktop client for AWS SSM Parameter Store",
-  "homepage": "https://vault-manager.invalid",
+  "homepage": "https://pmanager.l30.space",
   "private": true,
   "type": "module",
   "main": "./out/main/index.js",

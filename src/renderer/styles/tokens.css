@@ -1,4 +1,4 @@
-/* MongoDB Compass / LeafyGreen palette, plus semantic tokens for light and dark. */
+/* Color palette, plus semantic tokens for light and dark. */
 :root {
   --black: #001e2b;
   --white: #ffffff;
@@ -33,7 +33,7 @@
   --red-light3: #ffeae5;
   --purple-base: #b45af2;
 
-  --font-sans: 'Euclid Circular A', Inter, system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --font-sans: Inter, system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'Source Code Pro', ui-monospace, Menlo, Consolas, 'Liberation Mono', monospace;
   --radius-sm: 4px;
   --radius: 6px;
