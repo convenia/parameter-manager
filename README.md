@@ -136,6 +136,7 @@ Open Settings with the sliders icon (top right).
 | `Ctrl/Cmd+S` | Save the open parameter (in the editor) |
 | `Ctrl/Cmd+F` | Search inside the editor |
 | `Ctrl/Cmd+W` | Close the active tab |
+| `Ctrl/Cmd+=` / `Ctrl/Cmd+-` | Zoom in / out (`Ctrl/Cmd+0` resets) |
 | `Enter` | Open the focused row, or connect to the focused connection |
 | `Esc` | Close the topmost dialog |
 
@@ -253,17 +254,18 @@ parameter's stored metadata first.
 
 Automated tests never call AWS.
 
-- **Unit and renderer tests (Vitest), `npm test`:** 39 files and 272 tests.
+- **Unit and renderer tests (Vitest), `npm test`:** 39 files and 275 tests.
   - Main and shared code runs in Node.
   - Views and components run in jsdom, including the CodeMirror editor.
   - The real SSM service is tested with `aws-sdk-client-mock`.
-- **End-to-end tests (Playwright for Electron), `npm run test:e2e`:** 5 specs that launch the
+- **End-to-end tests (Playwright for Electron), `npm run test:e2e`:** 6 specs that launch the
   built app with `VAULT_FAKE_SSM=1` and an isolated data folder:
   - edit one key, check the diff, save, and see the new version in History
   - a read-only connection offers no write actions
   - create a parameter, then delete it
   - compare the production and staging `.env` files
   - unsaved edits stop the window from closing until they are reverted
+  - Ctrl+= and Ctrl+- zoom in and out, and Ctrl+0 resets
 
   A window briefly opens on the desktop for each spec.
 

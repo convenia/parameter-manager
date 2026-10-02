@@ -8,14 +8,33 @@ const here = dirname(fileURLToPath(import.meta.url))
 // The same key mark as the in-app brand. Resolves from src/main in tests and out/main when built.
 export const WINDOW_ICON = join(here, '../../resources/icon.png')
 
-export function installMenu() {
-  // A minimal menu: keeps copy/paste shortcuts (needed on macOS) without the default
-  // "Close Window" accelerator, so Ctrl+W can close tabs instead.
-  const template = [
-    ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
+// The zoomIn role only binds Ctrl+Plus (Ctrl+Shift+= on most layouts), so hidden
+// duplicates also catch Ctrl+= and the numpad keys.
+const hiddenShortcut = (role, accelerator) => ({ role, accelerator, visible: false, acceleratorWorksWhenHidden: true })
+
+export function menuTemplate({ platform, dev }) {
+  // A minimal menu: keeps copy/paste shortcuts (needed on macOS) and zoom without the
+  // default "Close Window" accelerator, so Ctrl+W can close tabs instead.
+  return [
+    ...(platform === 'darwin' ? [{ role: 'appMenu' }] : []),
     { role: 'editMenu' },
-    ...(process.env.ELECTRON_RENDERER_URL ? [{ role: 'viewMenu' }] : [])
+    {
+      label: 'View',
+      submenu: [
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        hiddenShortcut('zoomIn', 'CommandOrControl+='),
+        hiddenShortcut('zoomIn', 'CommandOrControl+numadd'),
+        { role: 'zoomOut' },
+        hiddenShortcut('zoomOut', 'CommandOrControl+numsub'),
+        ...(dev ? [{ type: 'separator' }, { role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' }] : [])
+      ]
+    }
   ]
+}
+
+export function installMenu() {
+  const template = menuTemplate({ platform: process.platform, dev: Boolean(process.env.ELECTRON_RENDERER_URL) })
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
