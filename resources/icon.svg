@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- The brand mark from the connections sidebar: the "key" icon on a green tile. -->
+  <rect x="32" y="32" width="448" height="448" rx="112" fill="#00684a"/>
+  <g transform="translate(130 130) scale(10.5)" fill="none" stroke="#00ed64" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 19a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/>
+    <path d="M10.9 12.1 20 3"/>
+    <path d="m17 6 2 2"/>
+    <path d="m15 8 2 2"/>
+  </g>
+</svg>

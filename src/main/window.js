@@ -5,6 +5,8 @@ import { isAllowedNavigation } from './navigation.js'
 import { confirmUnload } from './unload.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
+// The same key mark as the in-app brand. Resolves from src/main in tests and out/main when built.
+export const WINDOW_ICON = join(here, '../../resources/icon.png')
 
 export function installMenu() {
   // A minimal menu: keeps copy/paste shortcuts (needed on macOS) without the default
@@ -25,6 +27,7 @@ export function createMainWindow() {
     minWidth: 960,
     minHeight: 600,
     title: 'Parameter Manager',
+    icon: WINDOW_ICON,
     backgroundColor: '#001E2B',
     autoHideMenuBar: true,
     show: false,

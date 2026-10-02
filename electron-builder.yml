@@ -5,9 +5,11 @@ directories:
   buildResources: build
 files:
   - out/**
+  - resources/icon.png
   - package.json
 asar: true
 linux:
+  icon: resources/icon.png
   target:
     - AppImage
     - deb

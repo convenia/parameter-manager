@@ -253,7 +253,7 @@ parameter's stored metadata first.
 
 Automated tests never call AWS.
 
-- **Unit and renderer tests (Vitest), `npm test`:** 38 files and 271 tests.
+- **Unit and renderer tests (Vitest), `npm test`:** 39 files and 272 tests.
   - Main and shared code runs in Node.
   - Views and components run in jsdom, including the CodeMirror editor.
   - The real SSM service is tested with `aws-sdk-client-mock`.
