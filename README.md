@@ -166,7 +166,7 @@ Open Settings with the sliders icon (top right).
 | `npm start` | Run the built app (real AWS) |
 | `npm test` | Unit and renderer tests (Vitest) |
 | `npm run test:e2e` | Build, then the Playwright Electron tests (fake backend) |
-| `npm run dist` | Build a Linux AppImage and `.deb` into `dist/` |
+| `npm run dist` | Package the app for the current OS into `dist/` (`dist:linux`, `dist:mac`, `dist:win` pick one) |
 
 ### Environment variables
 
@@ -295,8 +295,35 @@ These risky inputs have dedicated tests:
 
 ## Packaging
 
-`npm run dist` builds `dist/Parameter Manager-<version>.AppImage` and
-`dist/parameter-manager_<version>_amd64.deb`.
+`npm run dist` packages the app for the current OS into `dist/`. Use `dist:linux`, `dist:mac`,
+or `dist:win` to choose a platform:
+
+| Platform | Files |
+| --- | --- |
+| Linux | `parameter-manager-<version>-linux-x86_64.AppImage`, `parameter-manager-<version>-linux-amd64.deb` |
+| macOS | `.dmg` and `.zip` for `arm64` and `x64` |
+| Windows | `parameter-manager-<version>-win-x64.exe` (NSIS installer) |
+
+Builds are unsigned. macOS Gatekeeper blocks the app on first launch: right-click it and choose
+**Open**, or run `xattr -cr "/Applications/Parameter Manager.app"`. On Windows, SmartScreen
+asks for **More info → Run anyway**.
+
+### CI/CD
+
+[`.github/workflows/build.yml`](.github/workflows/build.yml) runs on every push to `main`, on
+pull requests, and on demand:
+
+1. **test**: unit tests, then the end-to-end tests under Xvfb, on Linux.
+2. **package**: builds on Linux, macOS, and Windows runners. The packages are uploaded as
+   workflow artifacts (`parameter-manager-linux`, `-mac`, `-win`).
+3. **release**: only for tags starting with `v`. It checks that the tag matches the
+   `package.json` version, then creates a GitHub Release with every package attached.
+
+To release, bump `version` in `package.json`, commit, then push a matching tag:
+
+```bash
+git tag v0.2.0 && git push origin v0.2.0
+```
 
 The `.deb` format requires a project homepage, so `package.json` contains
 `"homepage": "https://pmanager.l30.space"`.

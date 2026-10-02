@@ -23,7 +23,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "electron-vite build && playwright test",
-    "dist": "electron-vite build && electron-builder --linux"
+    "dist": "electron-vite build && electron-builder",
+    "dist:linux": "electron-vite build && electron-builder --linux",
+    "dist:mac": "electron-vite build && electron-builder --mac",
+    "dist:win": "electron-vite build && electron-builder --win"
   },
   "dependencies": {
     "@aws-sdk/client-ssm": "^3.1145.0",
