@@ -8,9 +8,12 @@ across AWS accounts.
 It is written in plain JavaScript (no TypeScript, no UI framework) on Electron, electron-vite,
 CodeMirror 6, and the AWS SDK for JavaScript v3.
 
+![The parameter list, with the path tree in the sidebar](docs/screenshots/parameters.png)
+
 ## Contents
 
 - [Features](#features)
+- [Screenshots](#screenshots)
 - [Requirements](#requirements)
 - [Getting started](#getting-started)
 - [Using the app](#using-the-app)
@@ -40,6 +43,19 @@ CodeMirror 6, and the AWS SDK for JavaScript v3.
 - **Compare** two parameters, for example staging vs production, across connections.
 - **Light and dark themes**, or follow the system.
 - **Demo mode** with fake data, which never touches AWS.
+
+## Screenshots
+
+All screenshots use demo mode, so the data is fake.
+
+| | |
+| --- | --- |
+| ![Saved connections](docs/screenshots/connections.png) | ![The .env editor](docs/screenshots/editor.png) |
+| **Connections**: saved AWS profiles, regions, and prefixes | **Editor**: a `.env` value with highlighting and a byte counter |
+| ![The diff shown before a save](docs/screenshots/save-diff.png) | ![Version history](docs/screenshots/history.png) |
+| **Save**: the key-by-key diff, with values masked | **History**: every version, diffed against the current value |
+| ![Comparing production and staging](docs/screenshots/compare.png) | ![The dark theme](docs/screenshots/dark-theme.png) |
+| **Compare**: two parameters, even across accounts | **Dark theme** |
 
 ## Requirements
 
