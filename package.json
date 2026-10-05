@@ -3,7 +3,7 @@
   "productName": "Parameter Manager",
   "version": "0.1.1",
   "description": "Desktop client for AWS SSM Parameter Store",
-  "homepage": "https://pmanager.l30.space",
+  "homepage": "https://pmanager.convenia.com.br",
   "private": true,
   "type": "module",
   "main": "./out/main/index.js",

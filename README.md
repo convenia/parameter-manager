@@ -326,7 +326,7 @@ git tag v0.2.0 && git push origin v0.2.0
 ```
 
 The `.deb` format requires a project homepage, so `package.json` contains
-`"homepage": "https://pmanager.l30.space"`.
+`"homepage": "https://pmanager.convenia.com.br"`.
 
 ## Known limitations
 
